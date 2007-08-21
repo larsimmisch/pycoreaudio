@@ -838,6 +838,7 @@ void initcoreaudio(void) {
 
     _EXPORT_INT(m, kAudioFormatFlagIsFloat);
     _EXPORT_INT(m, kAudioFormatFlagIsBigEndian);
+    _EXPORT_INT(m, kAudioFormatFlagsNativeEndian);
     _EXPORT_INT(m, kAudioFormatFlagIsSignedInteger);
     _EXPORT_INT(m, kAudioFormatFlagIsPacked);
     _EXPORT_INT(m, kAudioFormatFlagIsAlignedHigh);

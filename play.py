@@ -34,7 +34,9 @@ def au_wav_prepare(au, fn, verbose = False):
     sd = coreaudio.AudioStreamBasicDescription(
         f.getframerate(),
         coreaudio.kAudioFormatLinearPCM,
-        coreaudio.kAudioFormatFlagIsSignedInteger,
+        coreaudio.kAudioFormatFlagIsSignedInteger | \
+        coreaudio.kAudioFormatFlagsNativeEndian | \
+        coreaudio.kAudioFormatFlagIsNonInterleaved,
         f.getsampwidth() * f.getnchannels(),
         f.getnchannels(), f.getsampwidth(), 1, f.getsampwidth() * 8)
 
