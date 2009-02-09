@@ -21,8 +21,9 @@ typedef int Py_ssize_t;
 #define PY_SSIZE_T_MIN INT_MIN
 #endif
 
-#define FOURCC_ARGS(x)  (x & 0xff000000) >> 24, (x & 0xff0000) >> 16, \
-		(x & 0xff00) >> 8, (x) & 0xff
+#define FOURCC_ARGS(x)  ((char)(x & 0xff000000) >> 24), \
+		(char)((x & 0xff0000) >> 16),					\
+		(char)((x & 0xff00) >> 8), (char)((x) & 0xff)
 
 PyDoc_STRVAR(coreaudio_module_doc,
 			 "This modules provides support for the CoreAudio API.\n"
@@ -41,7 +42,6 @@ static PyTypeObject ComponentDescriptionType;
 
 static PyObject *
 component_desc_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	int res;
 	component_desc_t *self;
 	OSType cotype = kAudioUnitType_Output;
 	OSType subtype = kAudioUnitSubType_DefaultOutput;
@@ -80,8 +80,8 @@ component_desc_repr(component_desc_t *obj)
                                FOURCC_ARGS(obj->desc.componentType), 
 							   FOURCC_ARGS(obj->desc.componentSubType),
 							   FOURCC_ARGS(obj->desc.componentManufacturer),
-							   obj->desc.componentFlags, 
-							   obj->desc.componentFlagsMask);
+							   (unsigned int)obj->desc.componentFlags, 
+							   (unsigned int)obj->desc.componentFlagsMask);
 }
 
 static PyMemberDef component_desc_members[] = {
@@ -404,11 +404,13 @@ audio_unit_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 static void
 audio_unit_dealloc(audio_unit_t *obj)
 {
-	if (obj->render_callback)
+	if (obj->render_callback) {
 		Py_DECREF(obj->render_callback);
+	}
 
-	if (obj->user_data)
+	if (obj->user_data) {
 		Py_DECREF(obj->user_data);
+	}
 
 	if (obj->instance)
 	{
@@ -527,8 +529,9 @@ audio_unit_render_callback(void *inRefCon,
 		if (len != ioData->mBuffers[i-1].mDataByteSize)
 		{
 			fprintf(stderr, "render_callback: buffer %d size mismatch: "
-					"expected %d bytes, got %d\n", i-1, 
-					ioData->mBuffers[i-1].mDataByteSize, len);
+					"expected %u bytes, got %d\n", i-1, 
+					(unsigned int)ioData->mBuffers[i-1].mDataByteSize, 
+					(int)len);
 			goto error;
 		}
 
@@ -560,15 +563,18 @@ audio_unit_setrendercallback(audio_unit_t *self, PyObject *args)
     AURenderCallbackStruct input;
 
 	if (!PyArg_ParseTuple(args, "O|O:SetRenderCallback", 
-						  &callback, &user_data))
+						  &callback, &user_data)) {
 		return NULL;
+	}
 
 	// If a callback or user data was previously set, decrement the refcount
-	if (self->render_callback)
+	if (self->render_callback) {
 		Py_DECREF(self->render_callback);
+	}
 
-	if (self->user_data)
+	if (self->user_data) {
 		Py_DECREF(self->user_data);
+	}
 	
 	// Keep a reference
 	Py_INCREF(callback);
@@ -677,10 +683,12 @@ static PyObject *
 audio_unit_render(audio_unit_t *self, PyObject *args)
 {
 	OSErr rc = noErr;
-	AudioUnitRenderActionFlags flags = 0;
+	// AudioUnitRenderActionFlags flags = 0;
 
-	if (!PyArg_ParseTuple(args, ":Render"))
+	if (!PyArg_ParseTuple(args, ":Render")) 
+	{
 		return NULL;
+	}
 
 	// rc = AudioUnitRender(self->instance);
 	if (rc != noErr)
@@ -939,8 +947,10 @@ void initcoreaudio(void) {
     _EXPORT_INT(m, kAudioFormatMPEGLayer1);
     _EXPORT_INT(m, kAudioFormatMPEGLayer2);
     _EXPORT_INT(m, kAudioFormatMPEGLayer3);
+#if (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1050)
     _EXPORT_INT(m, kAudioFormatDVAudio);
     _EXPORT_INT(m, kAudioFormatVariableDurationDVAudio);
+#endif
     _EXPORT_INT(m, kAudioFormatTimeCode);
     _EXPORT_INT(m, kAudioFormatMIDIStream);
     _EXPORT_INT(m, kAudioFormatParameterValueStream);
