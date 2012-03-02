@@ -16,4 +16,5 @@ caplaymu: caplaymu.c
 	gcc -g -o $@ $< -framework CoreServices -framework CoreAudio -framework AudioUnit 
 
 clean:
-	rm -f *.o *.so caplaymu
+	rm -f *.o *.so caplaymu 
+	rm -rf build caplaymu.dSYM

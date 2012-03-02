@@ -21,7 +21,7 @@ typedef int Py_ssize_t;
 #define PY_SSIZE_T_MIN INT_MIN
 #endif
 
-#define FOURCC_ARGS(x)  ((char)(x & 0xff000000) >> 24), \
+#define FOURCC_ARGS(x)  (char)((x & 0xff000000) >> 24), \
 		(char)((x & 0xff0000) >> 16),					\
 		(char)((x & 0xff00) >> 8), (char)((x) & 0xff)
 
@@ -46,10 +46,10 @@ component_desc_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 	OSType cotype = kAudioUnitType_Output;
 	OSType subtype = kAudioUnitSubType_DefaultOutput;
 	OSType manufacturer = kAudioUnitManufacturer_Apple;
-	unsigned long flags = 0;
-	unsigned long mask = 0;
+	UInt32 flags = 0;
+	UInt32 mask = 0;
 
-	if (!PyArg_ParseTuple(args,"|kkkkk:ComponentDescription", &cotype, 
+	if (!PyArg_ParseTuple(args,"|IIIII:ComponentDescription", &cotype, 
 						  &subtype, &manufacturer, &flags, &mask)) 
 		return NULL;
 
@@ -80,20 +80,20 @@ component_desc_repr(component_desc_t *obj)
                                FOURCC_ARGS(obj->desc.componentType), 
 							   FOURCC_ARGS(obj->desc.componentSubType),
 							   FOURCC_ARGS(obj->desc.componentManufacturer),
-							   (unsigned int)obj->desc.componentFlags, 
-							   (unsigned int)obj->desc.componentFlagsMask);
+							   (UInt32)obj->desc.componentFlags, 
+							   (UInt32)obj->desc.componentFlagsMask);
 }
 
 static PyMemberDef component_desc_members[] = {
-    {"componentType", T_ULONG, 
+    {"componentType", T_UINT, 
 	 offsetof(component_desc_t, desc.componentType), 0, ""},
-    {"componentSubType", T_ULONG, 
+    {"componentSubType", T_UINT, 
 	 offsetof(component_desc_t, desc.componentSubType), 0, ""},
-    {"componentManufacturer", T_ULONG, 
+    {"componentManufacturer", T_UINT, 
 	 offsetof(component_desc_t, desc.componentManufacturer), 0, ""},
-    {"componentFlags", T_ULONG, 
+    {"componentFlags", T_UINT, 
 	 offsetof(component_desc_t, desc.componentFlags), 0, ""},
-    {"componentFlagsMask", T_ULONG, 
+    {"componentFlagsMask", T_UINT, 
 	 offsetof(component_desc_t, desc.componentFlagsMask), 0, ""},
     {NULL}  /* Sentinel */
 };
@@ -193,7 +193,7 @@ audio_stream_basic_desc_new(PyTypeObject *type, PyObject *args,
 	UInt32 formatID, formatFlags, bytesPerPacket, framesPerPacket,
 		bytesPerFrame, channelsPerFrame, bitsPerChannel;
 
-	if (!PyArg_ParseTuple(args, "dkkkkkkk:AudioStreamBasicDescription", 
+	if (!PyArg_ParseTuple(args, "dIIIIIII:AudioStreamBasicDescription", 
 						  &sampleRate, &formatID, 
 						  &formatFlags, &bytesPerPacket, &framesPerPacket,
 						  &bytesPerFrame, &channelsPerFrame, &bitsPerChannel))
@@ -224,19 +224,19 @@ audio_stream_basic_desc_dealloc(audio_stream_basic_desc_t *obj)
 static PyMemberDef audio_stream_basic_desc_members[] = {
     {"mSampleRate", T_DOUBLE, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mSampleRate), 0, ""},
-    {"mFormatID", T_ULONG, 
+    {"mFormatID", T_UINT, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mFormatID), 0, ""},
-    {"mFormatFlags", T_ULONG, 
+    {"mFormatFlags", T_UINT, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mFormatFlags), 0, ""},
-    {"mBytesPerPacket", T_ULONG, 
+    {"mBytesPerPacket", T_UINT, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mBytesPerPacket), 0, ""},
-    {"mFramesPerPacket", T_ULONG, 
+    {"mFramesPerPacket", T_UINT, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mFramesPerPacket), 0, ""},
-    {"mBytesPerFrame", T_ULONG, 
+    {"mBytesPerFrame", T_UINT, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mBytesPerFrame), 0, ""},
-    {"mChannelsPerFrame", T_ULONG, 
+    {"mChannelsPerFrame", T_UINT, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mChannelsPerFrame), 0, ""},
-    {"mBitsPerChannel", T_ULONG, 
+    {"mBitsPerChannel", T_UINT, 
 	 offsetof(audio_stream_basic_desc_t, bdesc.mBitsPerChannel), 0, ""},
     {NULL}  /* Sentinel */
 };
@@ -316,10 +316,10 @@ static PyMemberDef audio_timestamp_members[] = {
 	 offsetof(audio_timestamp_t, timestamp.mRateScalar), 0, 
 	 "The ratio of actual host ticks per sample frame to the nominal "
 	 "host ticks."},
-    {"mWordClockTime", T_ULONG, 
+    {"mWordClockTime", T_UINT, 
 	 offsetof(audio_timestamp_t, timestamp.mWordClockTime), 0, 
 	 "The word clock time"},
-    {"mFlags", T_ULONG, 
+    {"mFlags", T_UINT, 
 	 offsetof(audio_timestamp_t, timestamp.mFlags), 0, 
 	 "A set of flags indicating which representations of the time are valid."
 	 "See the kAudioTimeStamp*Valid constants."},
