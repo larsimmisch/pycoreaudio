@@ -7,13 +7,14 @@
  *
  */
 
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
-#include <structmember.h>
+#include <AudioUnit/AudioUnit.h>
+#include <CoreAudio/CoreAudio.h>
 #include <CoreServices/CoreServices.h>
 #include <stdio.h>
+#include <structmember.h>
 #include <unistd.h>
-#include <AudioUnit/AudioUnit.h>
-#include <stdio.h>
 
 #if PY_VERSION_HEX < 0x02050000 && !defined(PY_SSIZE_T_MIN)
 typedef int Py_ssize_t;
@@ -21,915 +22,789 @@ typedef int Py_ssize_t;
 #define PY_SSIZE_T_MIN INT_MIN
 #endif
 
-#define FOURCC_ARGS(x)  (char)((x & 0xff000000) >> 24), \
-		(char)((x & 0xff0000) >> 16),					\
-		(char)((x & 0xff00) >> 8), (char)((x) & 0xff)
+#define FOURCC_ARGS(x)                                                        \
+    (char)((x & 0xff000000) >> 24), (char)((x & 0xff0000) >> 16),             \
+        (char)((x & 0xff00) >> 8), (char)((x) & 0xff)
 
 PyDoc_STRVAR(coreaudio_module_doc,
-			 "This modules provides support for the CoreAudio API.\n"
-			 "Available types are: Component, ComponentDescription and "
-			 "AudioStreamBasicDescType.\n"
-	);
+             "This modules provides support for the CoreAudio API.\n"
+             "Available types are: Component, ComponentDescription and "
+             "AudioStreamBasicDescType.\n");
 
-static PyObject *CoreAudioError;
+static PyObject* CoreAudioError;
 
 typedef struct {
-	PyObject_HEAD;
-	ComponentDescription desc;
+    PyObject_HEAD;
+    ComponentDescription desc;
 } component_desc_t;
 
 static PyTypeObject ComponentDescriptionType;
 
-static PyObject *
-component_desc_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	component_desc_t *self;
-	OSType cotype = kAudioUnitType_Output;
-	OSType subtype = kAudioUnitSubType_DefaultOutput;
-	OSType manufacturer = kAudioUnitManufacturer_Apple;
-	UInt32 flags = 0;
-	UInt32 mask = 0;
+static PyObject* component_desc_new(PyTypeObject* type, PyObject* args,
+                                    PyObject* kwds)
+{
+    component_desc_t* self;
+    OSType cotype = kAudioUnitType_Output;
+    OSType subtype = kAudioUnitSubType_DefaultOutput;
+    OSType manufacturer = kAudioUnitManufacturer_Apple;
+    UInt32 flags = 0;
+    UInt32 mask = 0;
 
-	if (!PyArg_ParseTuple(args,"|IIIII:ComponentDescription", &cotype, 
-						  &subtype, &manufacturer, &flags, &mask)) 
-		return NULL;
+    if (!PyArg_ParseTuple(args, "|IIIII:ComponentDescription", &cotype,
+                          &subtype, &manufacturer, &flags, &mask))
+        return NULL;
 
-	if (!(self = (component_desc_t *)PyObject_New(component_desc_t, 
-												  &ComponentDescriptionType))) 
-		return NULL;
+    if (!(self = (component_desc_t*)PyObject_New(component_desc_t,
+                                                 &ComponentDescriptionType)))
+        return NULL;
 
-	self->desc.componentType = cotype;
-	self->desc.componentSubType = subtype;
-	self->desc.componentManufacturer = manufacturer;
-	self->desc.componentFlags = flags;
-	self->desc.componentFlagsMask = mask;
-	
-	return (PyObject *)self;
+    self->desc.componentType = cotype;
+    self->desc.componentSubType = subtype;
+    self->desc.componentManufacturer = manufacturer;
+    self->desc.componentFlags = flags;
+    self->desc.componentFlagsMask = mask;
+
+    return (PyObject*)self;
 }
 
-static void
-component_desc_dealloc(component_desc_t *obj)
+static void component_desc_dealloc(component_desc_t* obj)
 {
     PyObject_Free(obj);
 }
 
-static PyObject *
-component_desc_repr(component_desc_t *obj)
+static PyObject* component_desc_repr(component_desc_t* obj)
 {
-    return PyString_FromFormat("ComponentDescription('%c%c%c%c', "
-							   "'%c%c%c%c', '%c%c%c%c', 0x%x, 0x%x)",
-                               FOURCC_ARGS(obj->desc.componentType), 
-							   FOURCC_ARGS(obj->desc.componentSubType),
-							   FOURCC_ARGS(obj->desc.componentManufacturer),
-							   (UInt32)obj->desc.componentFlags, 
-							   (UInt32)obj->desc.componentFlagsMask);
+    return PyUnicode_FromFormat("ComponentDescription('%c%c%c%c', "
+                               "'%c%c%c%c', '%c%c%c%c', 0x%x, 0x%x)",
+                               FOURCC_ARGS(obj->desc.componentType),
+                               FOURCC_ARGS(obj->desc.componentSubType),
+                               FOURCC_ARGS(obj->desc.componentManufacturer),
+                               (UInt32)obj->desc.componentFlags,
+                               (UInt32)obj->desc.componentFlagsMask);
 }
 
 static PyMemberDef component_desc_members[] = {
-    {"componentType", T_UINT, 
-	 offsetof(component_desc_t, desc.componentType), 0, ""},
-    {"componentSubType", T_UINT, 
-	 offsetof(component_desc_t, desc.componentSubType), 0, ""},
-    {"componentManufacturer", T_UINT, 
-	 offsetof(component_desc_t, desc.componentManufacturer), 0, ""},
-    {"componentFlags", T_UINT, 
-	 offsetof(component_desc_t, desc.componentFlags), 0, ""},
-    {"componentFlagsMask", T_UINT, 
-	 offsetof(component_desc_t, desc.componentFlagsMask), 0, ""},
-    {NULL}  /* Sentinel */
+    { "componentType", T_UINT, offsetof(component_desc_t, desc.componentType),
+      0, "" },
+    { "componentSubType", T_UINT,
+      offsetof(component_desc_t, desc.componentSubType), 0, "" },
+    { "componentManufacturer", T_UINT,
+      offsetof(component_desc_t, desc.componentManufacturer), 0, "" },
+    { "componentFlags", T_UINT,
+      offsetof(component_desc_t, desc.componentFlags), 0, "" },
+    { "componentFlagsMask", T_UINT,
+      offsetof(component_desc_t, desc.componentFlagsMask), 0, "" },
+    { NULL } /* Sentinel */
 };
 
 static PyTypeObject ComponentDescriptionType = {
-	PyObject_HEAD_INIT(&PyType_Type)
-	0,                              /*ob_size*/
-	"coreaudio.ComponentDescription",      /*tp_name*/
-	sizeof(component_desc_t),       /*tp_basicsize*/
-	0,                              /*tp_itemsize*/
-	/* methods */    
-	(destructor)component_desc_dealloc, /*tp_dealloc*/
-	0,                              /*print*/
-    0,                              /*tp_getattr*/
-	0,                              /*tp_setattr*/
-	0,                              /*tp_compare*/ 
-	(reprfunc)component_desc_repr,  /*tp_repr*/
-	0,                              /*tp_as_number*/
-	0,                              /*tp_as_sequence*/
-	0,                              /*tp_as_mapping*/
-	0,                              /*tp_hash*/
-	0,                              /*tp_call*/
-	0,                              /*tp_str*/
-	0,                              /*tp_getattro*/
-	0,                              /*tp_setattro*/
-	0,                              /*tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT,             /*tp_flags*/
-	"CoreFoundation ComponentDescription",  /*tp_doc*/
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "coreaudio.ComponentDescription",
+    .tp_basicsize = sizeof(component_desc_t),
+    .tp_doc = PyDoc_STR("CoreFoundation ComponentDescription"),
+    .tp_new = component_desc_new,
+    .tp_dealloc = (destructor)component_desc_dealloc,
+    .tp_repr = (reprfunc)component_desc_repr,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_members = component_desc_members,
 };
 
 typedef struct {
-	PyObject_HEAD;
-	Component component;
+    PyObject_HEAD;
+    Component component;
 } component_t;
 
 static PyTypeObject ComponentType;
 
-static PyObject *
-component_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	component_t *self;
-
-	if (!PyArg_ParseTuple(args, ":Component"))
-		return NULL;
-
-	if (!(self = (component_t *)PyObject_New(component_t, &ComponentType))) 
-		return NULL;
-
-	self->component = NULL;
-
-	return (PyObject *)self;
-}
-
-static void
-component_dealloc(component_t *obj)
+static PyObject* component_new(PyTypeObject* type, PyObject* args,
+                               PyObject* kwds)
 {
-    PyObject_Free(obj);
+    component_t* self;
+
+    if (!PyArg_ParseTuple(args, ":Component"))
+        return NULL;
+
+    if (!(self = (component_t*)PyObject_New(component_t, &ComponentType)))
+        return NULL;
+
+    self->component = NULL;
+
+    return (PyObject*)self;
 }
+
+static void component_dealloc(component_t* obj) { PyObject_Free(obj); }
 
 static PyTypeObject ComponentType = {
-	PyObject_HEAD_INIT(&PyType_Type)
-	0,                              /*ob_size*/
-	"coreaudio.Component",          /*tp_name*/
-	sizeof(component_t),            /*tp_basicsize*/
-	0,                              /*tp_itemsize*/
-	/* methods */    
-	(destructor)component_dealloc,  /*tp_dealloc*/
-	0,                              /*print*/
-    0,                              /*tp_getattr*/
-	0,                              /*tp_setattr*/
-	0,                              /*tp_compare*/ 
-	0,                              /*tp_repr*/
-	0,                              /*tp_as_number*/
-	0,                              /*tp_as_sequence*/
-	0,                              /*tp_as_mapping*/
-	0,                              /*tp_hash*/
-	0,                              /*tp_call*/
-	0,                              /*tp_str*/
-	0,                              /*tp_getattro*/
-	0,                              /*tp_setattro*/
-	0,                              /*tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT,             /*tp_flags*/
-	"CoreFoundation Component",     /*tp_doc*/
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "coreaudio.Component",
+    .tp_basicsize = sizeof(component_t),
+    .tp_doc = PyDoc_STR("CoreFoundation Component"),
+    .tp_new = component_new,
+    .tp_dealloc = (destructor)component_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
 };
 
 typedef struct {
-	PyObject_HEAD;
-	AudioStreamBasicDescription bdesc;
+    PyObject_HEAD;
+    AudioStreamBasicDescription bdesc;
 } audio_stream_basic_desc_t;
 
 static PyTypeObject AudioStreamBasicDescType;
 
-static PyObject *
-audio_stream_basic_desc_new(PyTypeObject *type, PyObject *args, 
-							PyObject *kwds) {
-	audio_stream_basic_desc_t *self;
-	Float64 sampleRate;
-	UInt32 formatID, formatFlags, bytesPerPacket, framesPerPacket,
-		bytesPerFrame, channelsPerFrame, bitsPerChannel;
+static PyObject* audio_stream_basic_desc_new(PyTypeObject* type,
+                                             PyObject* args, PyObject* kwds)
+{
+    audio_stream_basic_desc_t* self;
+    Float64 sampleRate;
+    UInt32 formatID, formatFlags, bytesPerPacket, framesPerPacket,
+        bytesPerFrame, channelsPerFrame, bitsPerChannel;
 
-	if (!PyArg_ParseTuple(args, "dIIIIIII:AudioStreamBasicDescription", 
-						  &sampleRate, &formatID, 
-						  &formatFlags, &bytesPerPacket, &framesPerPacket,
-						  &bytesPerFrame, &channelsPerFrame, &bitsPerChannel))
-		return NULL;
+    if (!PyArg_ParseTuple(args, "dIIIIIII:AudioStreamBasicDescription",
+                          &sampleRate, &formatID, &formatFlags,
+                          &bytesPerPacket, &framesPerPacket, &bytesPerFrame,
+                          &channelsPerFrame, &bitsPerChannel))
+        return NULL;
 
-	if (!(self = (audio_stream_basic_desc_t *)
-		  PyObject_New(audio_stream_basic_desc_t, &AudioStreamBasicDescType))) 
-		return NULL;
+    if (!(self = (audio_stream_basic_desc_t*)PyObject_New(
+              audio_stream_basic_desc_t, &AudioStreamBasicDescType)))
+        return NULL;
 
-	self->bdesc.mSampleRate = sampleRate;
-	self->bdesc.mFormatID = formatID;
-	self->bdesc.mFormatFlags = formatFlags;
-	self->bdesc.mBytesPerPacket = bytesPerPacket; 
-	self->bdesc.mFramesPerPacket = framesPerPacket;	
-	self->bdesc.mBytesPerFrame = bytesPerFrame;		
-	self->bdesc.mChannelsPerFrame = channelsPerFrame;
-	self->bdesc.mBitsPerChannel = bitsPerChannel;	
+    self->bdesc.mSampleRate = sampleRate;
+    self->bdesc.mFormatID = formatID;
+    self->bdesc.mFormatFlags = formatFlags;
+    self->bdesc.mBytesPerPacket = bytesPerPacket;
+    self->bdesc.mFramesPerPacket = framesPerPacket;
+    self->bdesc.mBytesPerFrame = bytesPerFrame;
+    self->bdesc.mChannelsPerFrame = channelsPerFrame;
+    self->bdesc.mBitsPerChannel = bitsPerChannel;
 
-	return (PyObject *)self;
+    return (PyObject*)self;
 }
 
-static void
-audio_stream_basic_desc_dealloc(audio_stream_basic_desc_t *obj)
+static void audio_stream_basic_desc_dealloc(audio_stream_basic_desc_t* obj)
 {
     PyObject_Free(obj);
 }
 
 static PyMemberDef audio_stream_basic_desc_members[] = {
-    {"mSampleRate", T_DOUBLE, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mSampleRate), 0, ""},
-    {"mFormatID", T_UINT, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mFormatID), 0, ""},
-    {"mFormatFlags", T_UINT, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mFormatFlags), 0, ""},
-    {"mBytesPerPacket", T_UINT, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mBytesPerPacket), 0, ""},
-    {"mFramesPerPacket", T_UINT, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mFramesPerPacket), 0, ""},
-    {"mBytesPerFrame", T_UINT, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mBytesPerFrame), 0, ""},
-    {"mChannelsPerFrame", T_UINT, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mChannelsPerFrame), 0, ""},
-    {"mBitsPerChannel", T_UINT, 
-	 offsetof(audio_stream_basic_desc_t, bdesc.mBitsPerChannel), 0, ""},
-    {NULL}  /* Sentinel */
+    { "mSampleRate", T_DOUBLE,
+      offsetof(audio_stream_basic_desc_t, bdesc.mSampleRate), 0, "" },
+    { "mFormatID", T_UINT,
+      offsetof(audio_stream_basic_desc_t, bdesc.mFormatID), 0, "" },
+    { "mFormatFlags", T_UINT,
+      offsetof(audio_stream_basic_desc_t, bdesc.mFormatFlags), 0, "" },
+    { "mBytesPerPacket", T_UINT,
+      offsetof(audio_stream_basic_desc_t, bdesc.mBytesPerPacket), 0, "" },
+    { "mFramesPerPacket", T_UINT,
+      offsetof(audio_stream_basic_desc_t, bdesc.mFramesPerPacket), 0, "" },
+    { "mBytesPerFrame", T_UINT,
+      offsetof(audio_stream_basic_desc_t, bdesc.mBytesPerFrame), 0, "" },
+    { "mChannelsPerFrame", T_UINT,
+      offsetof(audio_stream_basic_desc_t, bdesc.mChannelsPerFrame), 0, "" },
+    { "mBitsPerChannel", T_UINT,
+      offsetof(audio_stream_basic_desc_t, bdesc.mBitsPerChannel), 0, "" },
+    { NULL } /* Sentinel */
 };
 
 static PyTypeObject AudioStreamBasicDescType = {
-	PyObject_HEAD_INIT(&PyType_Type)
-	0,                              /*ob_size*/
-	"coreaudio.AudioStreamBasicDescription", /*tp_name*/
-	sizeof(audio_stream_basic_desc_t), /*tp_basicsize*/
-	0,                              /*tp_itemsize*/
-	/* methods */    
-	(destructor)audio_stream_basic_desc_dealloc, /*tp_dealloc*/
-	0,                              /*print*/
-    0,                              /*tp_getattr*/
-	0,                              /*tp_setattr*/
-	0,                              /*tp_compare*/ 
-	0,                              /*tp_repr*/
-	0,                              /*tp_as_number*/
-	0,                              /*tp_as_sequence*/
-	0,                              /*tp_as_mapping*/
-	0,                              /*tp_hash*/
-	0,                              /*tp_call*/
-	0,                              /*tp_str*/
-	0,                              /*tp_getattro*/
-	0,                              /*tp_setattro*/
-	0,                              /*tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT,             /*tp_flags*/
-	"AudioUnit AudioStreamBasicDescription",  /*tp_doc*/
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "coreaudio.AudioStreamBasicDescription",
+    .tp_basicsize = sizeof(audio_stream_basic_desc_t),
+    .tp_doc = PyDoc_STR("AudioUnit AudioStreamBasicDescription"),
+    .tp_new = audio_stream_basic_desc_new,
+    .tp_dealloc = (destructor)audio_stream_basic_desc_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_members = audio_stream_basic_desc_members,
 };
 
 typedef struct {
-	PyObject_HEAD;
-	AudioTimeStamp timestamp;
+    PyObject_HEAD;
+    AudioTimeStamp timestamp;
 } audio_timestamp_t;
 
 static PyTypeObject AudioTimeStampType;
 
-static PyObject *
-audio_timestamp_new(PyTypeObject *type, PyObject *args, 
-					PyObject *kwds) 
+static PyObject* audio_timestamp_new(PyTypeObject* type, PyObject* args,
+                                     PyObject* kwds)
 {
-	audio_timestamp_t *self;
+    audio_timestamp_t* self;
 
-	if (!PyArg_ParseTuple(args, ":AudioTimeStamp"))
-		return NULL;
+    if (!PyArg_ParseTuple(args, ":AudioTimeStamp"))
+        return NULL;
 
-	if (!(self = (audio_timestamp_t *)
-		  PyObject_New(audio_timestamp_t, &AudioTimeStampType))) 
-		return NULL;
+    if (!(self = (audio_timestamp_t*)PyObject_New(audio_timestamp_t,
+                                                  &AudioTimeStampType)))
+        return NULL;
 
-	return (PyObject *)self;
+    return (PyObject*)self;
 }
 
-static void
-audio_timestamp_dealloc(audio_stream_basic_desc_t *obj)
+static void audio_timestamp_dealloc(audio_stream_basic_desc_t* obj)
 {
     PyObject_Free(obj);
 }
 
-static PyObject *
-audio_timestamp_get_host_time(audio_timestamp_t *self)
+static PyObject* audio_timestamp_get_host_time(audio_timestamp_t* self)
 {
-	self->timestamp.mHostTime = AudioGetCurrentHostTime();
-	self->timestamp.mFlags |= kAudioTimeStampHostTimeValid;
+    self->timestamp.mHostTime = AudioGetCurrentHostTime();
+    self->timestamp.mFlags |= kAudioTimeStampHostTimeValid;
 
-	return PyInt_FromLong(self->timestamp.mHostTime);
+    return PyLong_FromLong(self->timestamp.mHostTime);
 }
 
 static PyMemberDef audio_timestamp_members[] = {
-    {"mSampleTime", T_DOUBLE, 
-	 offsetof(audio_timestamp_t, timestamp.mSampleTime), 0, 
-	 "The absolute sample frame time."},
-    {"mHostTime", T_ULONGLONG, 
-	 offsetof(audio_timestamp_t, timestamp.mHostTime), 0, 
-	 "The host machine's time base."},
-    {"mRateScalar", T_DOUBLE, 
-	 offsetof(audio_timestamp_t, timestamp.mRateScalar), 0, 
-	 "The ratio of actual host ticks per sample frame to the nominal "
-	 "host ticks."},
-    {"mWordClockTime", T_UINT, 
-	 offsetof(audio_timestamp_t, timestamp.mWordClockTime), 0, 
-	 "The word clock time"},
-    {"mFlags", T_UINT, 
-	 offsetof(audio_timestamp_t, timestamp.mFlags), 0, 
-	 "A set of flags indicating which representations of the time are valid."
-	 "See the kAudioTimeStamp*Valid constants."},
-    {NULL}  /* Sentinel */
+    { "mSampleTime", T_DOUBLE,
+      offsetof(audio_timestamp_t, timestamp.mSampleTime), 0,
+      "The absolute sample frame time." },
+    { "mHostTime", T_ULONGLONG,
+      offsetof(audio_timestamp_t, timestamp.mHostTime), 0,
+      "The host machine's time base." },
+    { "mRateScalar", T_DOUBLE,
+      offsetof(audio_timestamp_t, timestamp.mRateScalar), 0,
+      "The ratio of actual host ticks per sample frame to the nominal "
+      "host ticks." },
+    { "mWordClockTime", T_UINT,
+      offsetof(audio_timestamp_t, timestamp.mWordClockTime), 0,
+      "The word clock time" },
+    { "mFlags", T_UINT, offsetof(audio_timestamp_t, timestamp.mFlags), 0,
+      "A set of flags indicating which representations of the time are valid."
+      "See the kAudioTimeStamp*Valid constants." },
+    { NULL } /* Sentinel */
 };
 
 static PyMethodDef audio_timestamp_methods[] = {
-	{"GetHostTime", (PyCFunction)audio_timestamp_get_host_time, 
-	 METH_NOARGS},
-	{NULL, NULL}
+    { "GetHostTime", (PyCFunction)audio_timestamp_get_host_time, METH_NOARGS },
+    { NULL, NULL }
 };
 
 #if PY_VERSION_HEX < 0x02020000
-static PyObject *
-audio_timestamp_getattr(audio_timestamp_t *self, char *name) {
-	return Py_FindMethod(audio_timestamp_methods, (PyObject *)self, name);
+static PyObject* audio_timestamp_getattr(audio_timestamp_t* self, char* name)
+{
+    return Py_FindMethod(audio_timestamp_methods, (PyObject*)self, name);
 }
 #endif
 
 static PyTypeObject AudioTimeStampType = {
-	PyObject_HEAD_INIT(&PyType_Type)
-	0,                              /*ob_size*/
-	"coreaudio.AudioTimeStamp",     /*tp_name*/
-	sizeof(audio_timestamp_t),      /*tp_basicsize*/
-	0,                              /*tp_itemsize*/
-	/* methods */    
-	(destructor)audio_timestamp_dealloc, /*tp_dealloc*/
-	0,                              /*print*/
-#if PY_VERSION_HEX < 0x02020000
-    (getattrfunc)audio_timestamp_getattr, /*tp_getattr*/
-#else
-    0,                              /*tp_getattr*/
-#endif
-	0,                              /*tp_setattr*/
-	0,                              /*tp_compare*/ 
-	0,                              /*tp_repr*/
-	0,                              /*tp_as_number*/
-	0,                              /*tp_as_sequence*/
-	0,                              /*tp_as_mapping*/
-	0,                              /*tp_hash*/
-	0,                              /*tp_call*/
-	0,                              /*tp_str*/
-#if PY_VERSION_HEX >= 0x02020000
-	PyObject_GenericGetAttr,        /*tp_getattro*/
-#else
-	0,                              /*tp_getattro*/
-#endif
-	0,                              /*tp_setattro*/
-	0,                              /*tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT,             /*tp_flags*/
-	"AudioTimeStamp - A structure that holds different representations of\n"
-	"the same point in time.",  /*tp_doc*/
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "coreaudio.AudioTimeStamp",
+    .tp_basicsize = sizeof(audio_timestamp_t),
+    .tp_doc = PyDoc_STR("AudioTimeStamp - A structure that holds different representations of the same point in time."),
+    .tp_new = audio_timestamp_new,
+    .tp_dealloc = (destructor)audio_timestamp_dealloc,
+    .tp_getattro = PyObject_GenericGetAttr,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = audio_timestamp_methods,
+    .tp_members = audio_timestamp_members,
 };
 
 typedef struct {
-	PyObject_HEAD;
-	AudioUnit instance;
-	PyObject *render_callback;
-	PyObject *user_data;
+    PyObject_HEAD;
+    AudioUnit instance;
+    PyObject* render_callback;
+    PyObject* user_data;
 } audio_unit_t;
 
 static PyTypeObject AudioUnitType;
 
-static PyObject *
-audio_unit_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	audio_unit_t *self;
+static PyObject* audio_unit_new(PyTypeObject* type, PyObject* args,
+                                PyObject* kwds)
+{
+    audio_unit_t* self;
 
-	if (!PyArg_ParseTuple(args, ":AudioUnit"))
-		return NULL;
+    if (!PyArg_ParseTuple(args, ":AudioUnit"))
+        return NULL;
 
-	if (!(self = (audio_unit_t *)PyObject_New(
-			  audio_unit_t, &AudioUnitType))) 
-		return NULL;
+    if (!(self = (audio_unit_t*)PyObject_New(audio_unit_t, &AudioUnitType)))
+        return NULL;
 
-	self->instance = NULL;
-	self->render_callback = NULL;
-	self->user_data = NULL;
+    self->instance = NULL;
+    self->render_callback = NULL;
+    self->user_data = NULL;
 
-	return (PyObject *)self;
+    return (PyObject*)self;
 }
 
-static void
-audio_unit_dealloc(audio_unit_t *obj)
+static void audio_unit_dealloc(audio_unit_t* obj)
 {
-	if (obj->render_callback) {
-		Py_DECREF(obj->render_callback);
-	}
+    if (obj->render_callback) {
+        Py_DECREF(obj->render_callback);
+    }
 
-	if (obj->user_data) {
-		Py_DECREF(obj->user_data);
-	}
+    if (obj->user_data) {
+        Py_DECREF(obj->user_data);
+    }
 
-	if (obj->instance)
-	{
-		AudioUnitUninitialize(obj->instance);
-		CloseComponent(obj->instance);
-	}
+    if (obj->instance) {
+        AudioUnitUninitialize(obj->instance);
+        CloseComponent(obj->instance);
+    }
 
     PyObject_Free(obj);
 }
 
-static PyObject *
-audio_unit_setstreamformat(audio_unit_t *self, PyObject *args)
+static PyObject* audio_unit_setstreamformat(audio_unit_t* self, PyObject* args)
 {
-	OSErr rc;
-	audio_stream_basic_desc_t *bdesc;
+    OSErr rc;
+    audio_stream_basic_desc_t* bdesc;
 
-	if (!PyArg_ParseTuple(args, "O!:SetStreamFormat", 
-						  &AudioStreamBasicDescType, &bdesc))
-		return NULL;
+    if (!PyArg_ParseTuple(args, "O!:SetStreamFormat",
+                          &AudioStreamBasicDescType, &bdesc))
+        return NULL;
 
-	rc = AudioUnitSetProperty(self->instance, 
-							  kAudioUnitProperty_StreamFormat,
-							  kAudioUnitScope_Input,
-							  0,
-							  &bdesc->bdesc,
-							  sizeof(AudioStreamBasicDescription));
+    rc = AudioUnitSetProperty(self->instance, kAudioUnitProperty_StreamFormat,
+                              kAudioUnitScope_Input, 0, &bdesc->bdesc,
+                              sizeof(AudioStreamBasicDescription));
 
-	if (rc != noErr)
-	{
-		PyErr_Format(
-			CoreAudioError, "AudioUnitSetProperty(StreamFormat) failed: %4.4s", 
-			(char*)&rc);
-		return NULL;
-	}
-	
-	Py_INCREF(Py_None);
-	return Py_None;
+    if (rc != noErr) {
+        PyErr_Format(CoreAudioError,
+                     "AudioUnitSetProperty(StreamFormat) failed: %4.4s",
+                     (char*)&rc);
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
-static OSStatus
-audio_unit_render_callback(void *inRefCon, 
-						   AudioUnitRenderActionFlags *ioActionFlags, 
-						   const AudioTimeStamp *inTimeStamp, 
-						   UInt32 inBusNumber, 
-						   UInt32 inNumberFrames, 
-						   AudioBufferList *ioData)
+static OSStatus audio_unit_render_callback(
+    void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags,
+    const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber,
+    UInt32 inNumberFrames, AudioBufferList* ioData)
 {
-	int i;
-	PyObject *o;
-	audio_unit_t *self = (audio_unit_t*)inRefCon;
-	PyGILState_STATE gil = PyGILState_Ensure();
+    int i;
+    PyObject* o;
+    audio_unit_t* self = (audio_unit_t*)inRefCon;
+    PyGILState_STATE gil = PyGILState_Ensure();
 
-	PyObject *args = Py_BuildValue(
-		"(k{sdsKsdsKsk}iiiO)", 
-		*ioActionFlags,
-		"mSampleTime", inTimeStamp->mSampleTime,
-		"mHostTime", inTimeStamp->mHostTime,
-		"mRateScalar", inTimeStamp->mRateScalar,
-		"mWordClockTime", inTimeStamp->mWordClockTime,
-		"mFlags", inTimeStamp->mFlags,
-		inBusNumber,
-		inNumberFrames,
-		ioData->mNumberBuffers,
-		self->user_data);
-	
-	PyObject *result = PyObject_CallObject(self->render_callback, args);
-	if (!result)
-		goto py_error;
+    PyObject* args = Py_BuildValue(
+        "(k{sdsKsdsKsk}iiiO)", *ioActionFlags, "mSampleTime",
+        inTimeStamp->mSampleTime, "mHostTime", inTimeStamp->mHostTime,
+        "mRateScalar", inTimeStamp->mRateScalar, "mWordClockTime",
+        inTimeStamp->mWordClockTime, "mFlags", inTimeStamp->mFlags,
+        inBusNumber, inNumberFrames, ioData->mNumberBuffers, self->user_data);
 
-	if (!PyTuple_Check(result))
-	{
-		fprintf(stderr, "render callback must return a tuple\n");
-		goto error;
-	}
+    PyObject* result = PyObject_CallObject(self->render_callback, args);
+    if (!result)
+        goto py_error;
 
-	o = PyTuple_GetItem(result, 0);
-	if (!o)
-		goto py_error;
+    if (!PyTuple_Check(result)) {
+        fprintf(stderr, "render callback must return a tuple\n");
+        goto error;
+    }
 
-	if (o != Py_None)
-	{
-		if (!PyInt_Check(o))
-		{
-			fprintf(
-				stderr, "render callback must return a tuple (int, buffers)\n");
-			goto error;
-		}
+    o = PyTuple_GetItem(result, 0);
+    if (!o)
+        goto py_error;
 
-		*ioActionFlags = PyInt_AsUnsignedLongMask(o);
-	}
+    if (o != Py_None) {
+        if (!PyLong_Check(o)) {
+            fprintf(stderr,
+                    "render callback must return a tuple (int, buffers)\n");
+            goto error;
+        }
 
-	for (i = 1; i < PyTuple_Size(result); ++i)
-	{
-		char *buffer;
-		Py_ssize_t len;
+        *ioActionFlags = PyLong_AsUnsignedLongMask(o);
+    }
 
-		o = PyTuple_GetItem(result, i);
-		if (!PyString_Check(o))
-		{
-			fprintf(
-				stderr, "render callback must return a tuple (int, buffers)\n");
-			goto error;
-		}
-		if (PyString_AsStringAndSize(o, &buffer, &len) < 0)
-			goto py_error;
+    for (i = 1; i < PyTuple_Size(result); ++i) {
+        char* buffer;
+        Py_ssize_t len;
 
-		if (len == 0)
-		{
-			PyGILState_Release(gil);
-			// No data: stop audio output
-			AudioOutputUnitStop(self->instance);
+        o = PyTuple_GetItem(result, i);
+        if (!PyUnicode_Check(o)) {
+            fprintf(stderr,
+                    "render callback must return a tuple (int, buffers)\n");
+            goto error;
+        }
+        if (PyBytes_AsStringAndSize(o, &buffer, &len) < 0)
+            goto py_error;
 
-			return 0;
-		}
+        if (len == 0) {
+            PyGILState_Release(gil);
+            // No data: stop audio output
+            AudioOutputUnitStop(self->instance);
 
-		if (len != ioData->mBuffers[i-1].mDataByteSize)
-		{
-			fprintf(stderr, "render_callback: buffer %d size mismatch: "
-					"expected %u bytes, got %d\n", i-1, 
-					(unsigned int)ioData->mBuffers[i-1].mDataByteSize, 
-					(int)len);
-			goto error;
-		}
+            return 0;
+        }
 
-		memcpy(ioData->mBuffers[i-1].mData, buffer, len);
-	}
+        if (len != ioData->mBuffers[i - 1].mDataByteSize) {
+            fprintf(stderr,
+                    "render_callback: buffer %d size mismatch: "
+                    "expected %u bytes, got %d\n",
+                    i - 1, (unsigned int)ioData->mBuffers[i - 1].mDataByteSize,
+                    (int)len);
+            goto error;
+        }
 
-	PyGILState_Release(gil);
+        memcpy(ioData->mBuffers[i - 1].mData, buffer, len);
+    }
 
-	return 0;
+    PyGILState_Release(gil);
+
+    return 0;
 
 py_error:
-	// Todo: store the exception and traceback somewhere
-	PyErr_Print();
+    // Todo: store the exception and traceback somewhere
+    PyErr_Print();
 
 error:
-	PyGILState_Release(gil);
-	// Stop output - nothing good could come out of continued operation
-	AudioOutputUnitStop(self->instance);
+    PyGILState_Release(gil);
+    // Stop output - nothing good could come out of continued operation
+    AudioOutputUnitStop(self->instance);
 
-	return -1;
+    return -1;
 }
 
-static PyObject *
-audio_unit_setrendercallback(audio_unit_t *self, PyObject *args)
+static PyObject* audio_unit_setrendercallback(audio_unit_t* self,
+                                              PyObject* args)
 {
-	OSErr rc;
-	PyObject *callback;
-	PyObject *user_data = Py_None;
+    OSErr rc;
+    PyObject* callback;
+    PyObject* user_data = Py_None;
     AURenderCallbackStruct input;
 
-	if (!PyArg_ParseTuple(args, "O|O:SetRenderCallback", 
-						  &callback, &user_data)) {
-		return NULL;
-	}
+    if (!PyArg_ParseTuple(args, "O|O:SetRenderCallback", &callback,
+                          &user_data)) {
+        return NULL;
+    }
 
-	// If a callback or user data was previously set, decrement the refcount
-	if (self->render_callback) {
-		Py_DECREF(self->render_callback);
-	}
+    // If a callback or user data was previously set, decrement the refcount
+    if (self->render_callback) {
+        Py_DECREF(self->render_callback);
+    }
 
-	if (self->user_data) {
-		Py_DECREF(self->user_data);
-	}
-	
-	// Keep a reference
-	Py_INCREF(callback);
-	Py_INCREF(user_data);
+    if (self->user_data) {
+        Py_DECREF(self->user_data);
+    }
 
-	self->render_callback = callback;
-	self->user_data = user_data;
+    // Keep a reference
+    Py_INCREF(callback);
+    Py_INCREF(user_data);
 
-	if (callback != Py_None)
-	{
-		input.inputProc = audio_unit_render_callback;
-		input.inputProcRefCon = self;
-	}
-	else
-	{
-		input.inputProc = NULL;
-		input.inputProcRefCon = NULL;
-	}
+    self->render_callback = callback;
+    self->user_data = user_data;
 
-	rc = AudioUnitSetProperty (self->instance, 
-							   kAudioUnitProperty_SetRenderCallback, 
-							   kAudioUnitScope_Input,
-							   0, 
-							   &input, 
-							   sizeof(input));
+    if (callback != Py_None) {
+        input.inputProc = audio_unit_render_callback;
+        input.inputProcRefCon = self;
+    } else {
+        input.inputProc = NULL;
+        input.inputProcRefCon = NULL;
+    }
 
-	if (rc != noErr)
-	{
-		self->render_callback = NULL;
-		self->user_data = NULL;
+    rc = AudioUnitSetProperty(self->instance,
+                              kAudioUnitProperty_SetRenderCallback,
+                              kAudioUnitScope_Input, 0, &input, sizeof(input));
 
-		Py_DECREF(callback);
-		Py_DECREF(user_data);
+    if (rc != noErr) {
+        self->render_callback = NULL;
+        self->user_data = NULL;
 
-		PyErr_Format(
-			CoreAudioError, "AudioUnitSetProperty(RenderCallback) failed: "
-			"%c%c%c%c", FOURCC_ARGS(rc));
-		return NULL;
-	}
+        Py_DECREF(callback);
+        Py_DECREF(user_data);
 
-	Py_INCREF(Py_None);
-	return Py_None;
+        PyErr_Format(CoreAudioError,
+                     "AudioUnitSetProperty(RenderCallback) failed: "
+                     "%c%c%c%c",
+                     FOURCC_ARGS(rc));
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
-static PyObject *
-audio_unit_initialize(audio_unit_t *self, PyObject *args)
+static PyObject* audio_unit_initialize(audio_unit_t* self, PyObject* args)
 {
-	OSErr rc;
+    OSErr rc;
 
-	if (!PyArg_ParseTuple(args, ":Initialize"))
-		return NULL;
+    if (!PyArg_ParseTuple(args, ":Initialize"))
+        return NULL;
 
-	rc = AudioUnitInitialize(self->instance);
-	if (rc != noErr)
-	{
-		PyErr_Format(CoreAudioError, "Initialize failed: %4.4s", 
-					 (char*)&rc);
-		return NULL;
-	}
-	
-	Py_INCREF(Py_None);
-	return Py_None;
+    rc = AudioUnitInitialize(self->instance);
+    if (rc != noErr) {
+        PyErr_Format(CoreAudioError, "Initialize failed: %4.4s", (char*)&rc);
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
-static PyObject *
-audio_unit_start(audio_unit_t *self, PyObject *args)
+static PyObject* audio_unit_start(audio_unit_t* self, PyObject* args)
 {
-	OSErr rc;
+    OSErr rc;
 
-	if (!PyArg_ParseTuple(args, ":Start"))
-		return NULL;
+    if (!PyArg_ParseTuple(args, ":Start"))
+        return NULL;
 
-	rc = AudioOutputUnitStart(self->instance);
-	if (rc != noErr)
-	{
-		PyErr_Format(CoreAudioError, "Start failed: %4.4s", 
-					 (char*)&rc);
-		return NULL;
-	}
-	
-	Py_INCREF(Py_None);
-	return Py_None;
+    rc = AudioOutputUnitStart(self->instance);
+    if (rc != noErr) {
+        PyErr_Format(CoreAudioError, "Start failed: %4.4s", (char*)&rc);
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
-static PyObject *
-audio_unit_stop(audio_unit_t *self, PyObject *args)
+static PyObject* audio_unit_stop(audio_unit_t* self, PyObject* args)
 {
-	OSErr rc;
+    OSErr rc;
 
-	if (!PyArg_ParseTuple(args, ":Stop"))
-		return NULL;
+    if (!PyArg_ParseTuple(args, ":Stop"))
+        return NULL;
 
-	rc = AudioOutputUnitStop(self->instance);
-	if (rc != noErr)
-	{
-		PyErr_Format(CoreAudioError, "Stop failed: %4.4s", 
-					 (char*)&rc);
-		return NULL;
-	}
-	
-	Py_INCREF(Py_None);
-	return Py_None;
+    rc = AudioOutputUnitStop(self->instance);
+    if (rc != noErr) {
+        PyErr_Format(CoreAudioError, "Stop failed: %4.4s", (char*)&rc);
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
-static PyObject *
-audio_unit_render(audio_unit_t *self, PyObject *args)
+static PyObject* audio_unit_render(audio_unit_t* self, PyObject* args)
 {
-	OSErr rc = noErr;
-	// AudioUnitRenderActionFlags flags = 0;
+    OSErr rc = noErr;
+    // AudioUnitRenderActionFlags flags = 0;
 
-	if (!PyArg_ParseTuple(args, ":Render")) 
-	{
-		return NULL;
-	}
+    if (!PyArg_ParseTuple(args, ":Render")) {
+        return NULL;
+    }
 
-	// rc = AudioUnitRender(self->instance);
-	if (rc != noErr)
-	{
-		PyErr_Format(CoreAudioError, "Render failed: %4.4s", 
-					 (char*)&rc);
-		return NULL;
-	}
-	
-	Py_INCREF(Py_None);
-	return Py_None;
+    // rc = AudioUnitRender(self->instance);
+    if (rc != noErr) {
+        PyErr_Format(CoreAudioError, "Render failed: %4.4s", (char*)&rc);
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
 /* AudioUnit Object Bureaucracy */
 
 static PyMethodDef audio_unit_methods[] = {
-	{"Initialize", (PyCFunction)audio_unit_initialize, 
-	 METH_VARARGS},
-	{"Start", (PyCFunction)audio_unit_start, METH_VARARGS},
-	{"Stop", (PyCFunction)audio_unit_stop, METH_VARARGS},
-	{"SetStreamFormat", (PyCFunction)audio_unit_setstreamformat, 
-	 METH_VARARGS},
-	{"SetRenderCallback", (PyCFunction)audio_unit_setrendercallback, 
-	 METH_VARARGS},
-	{"Render", (PyCFunction)audio_unit_render, METH_VARARGS},
-	{NULL, NULL}
+    { "Initialize", (PyCFunction)audio_unit_initialize, METH_VARARGS },
+    { "Start", (PyCFunction)audio_unit_start, METH_VARARGS },
+    { "Stop", (PyCFunction)audio_unit_stop, METH_VARARGS },
+    { "SetStreamFormat", (PyCFunction)audio_unit_setstreamformat,
+      METH_VARARGS },
+    { "SetRenderCallback", (PyCFunction)audio_unit_setrendercallback,
+      METH_VARARGS },
+    { "Render", (PyCFunction)audio_unit_render, METH_VARARGS },
+    { NULL, NULL }
 };
 
 #if PY_VERSION_HEX < 0x02020000
-static PyObject *
-audio_unit_getattr(audio_unit_t *self, char *name) {
-	return Py_FindMethod(audio_unit_methods, (PyObject *)self, name);
+static PyObject* audio_unit_getattr(audio_unit_t* self, char* name)
+{
+    return Py_FindMethod(audio_unit_methods, (PyObject*)self, name);
 }
 #endif
 
 static PyTypeObject AudioUnitType = {
-	PyObject_HEAD_INIT(&PyType_Type)
-	0,                              /*ob_size*/
-	"coreaudio.AudioUnit",          /*tp_name*/
-	sizeof(audio_unit_t),           /*tp_basicsize*/
-	0,                              /*tp_itemsize*/
-	/* methods */    
-	(destructor)audio_unit_dealloc, /*tp_dealloc*/
-	0,                              /*print*/
-#if PY_VERSION_HEX < 0x02020000
-    (getattrfunc)audio_unit_getattr, /*tp_getattr*/
-#else
-    0,                              /*tp_getattr*/
-#endif
-	0,                              /*tp_setattr*/
-	0,                              /*tp_compare*/ 
-	0,                              /*tp_repr*/
-	0,                              /*tp_as_number*/
-	0,                              /*tp_as_sequence*/
-	0,                              /*tp_as_mapping*/
-	0,                              /*tp_hash*/
-	0,                              /*tp_call*/
-	0,                              /*tp_str*/
-#if PY_VERSION_HEX >= 0x02020000
-	PyObject_GenericGetAttr,        /*tp_getattro*/
-#else
-	0,                              /*tp_getattro*/
-#endif
-	0,                              /*tp_setattro*/
-	0,                              /*tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT,             /*tp_flags*/
-	"CoreFoundation AudioUnit",     /*tp_doc*/
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "coreaudio.AudioUnit",
+    .tp_basicsize = sizeof(audio_unit_t),
+    .tp_doc = PyDoc_STR("CoreFoundation AudioUnit"),
+    .tp_new = audio_unit_new,
+    .tp_dealloc = (destructor)audio_unit_dealloc,
+    .tp_getattro = PyObject_GenericGetAttr,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = audio_unit_methods,
 };
 
-static PyObject *
-coreaudio_findnextcomponent(PyObject *self, PyObject *args) {
-	component_t *component;
-	component_desc_t *componentDescription;
-	Component c; 
-	component_t *retval;
+static PyObject* coreaudio_findnextcomponent(PyObject* self, PyObject* args)
+{
+    component_t* component;
+    component_desc_t* componentDescription;
+    Component c;
+    component_t* retval;
 
-	if (!PyArg_ParseTuple(args,"OO!:FindNextComponent", &component, 
-						  &ComponentDescriptionType, &componentDescription)) 
-						  return NULL;
+    if (!PyArg_ParseTuple(args, "OO!:FindNextComponent", &component,
+                          &ComponentDescriptionType, &componentDescription))
+        return NULL;
 
-	if (!PyArg_ParseTuple(args,"OO:FindNextComponent", &component, 
-						  &componentDescription)) 
-		return NULL;
+    if (!PyArg_ParseTuple(args, "OO:FindNextComponent", &component,
+                          &componentDescription))
+        return NULL;
 
-	if ((PyObject*)component == Py_None)
-		c = FindNextComponent(NULL, &componentDescription->desc);
-	else
-		c = FindNextComponent(component->component, 
-							  &componentDescription->desc);
+    if ((PyObject*)component == Py_None)
+        c = FindNextComponent(NULL, &componentDescription->desc);
+    else
+        c = FindNextComponent(component->component,
+                              &componentDescription->desc);
 
-	if (!c)
-	{
-		Py_INCREF(Py_None);
-		return Py_None;
-	}
+    if (!c) {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
 
-	if (!(retval = (component_t *)PyObject_New(component_t, &ComponentType))) 
-		return NULL;
+    if (!(retval = (component_t*)PyObject_New(component_t, &ComponentType)))
+        return NULL;
 
-	retval->component = c;
+    retval->component = c;
 
-	return (PyObject*)retval;
+    return (PyObject*)retval;
 }
 
-static PyObject *
-coreaudio_openacomponent(PyObject *self, PyObject *args) {
-	component_t *component;
-	AudioUnit au;
-	audio_unit_t *retval;
-	OSErr rc;
-	
-	if (!PyArg_ParseTuple(args,"O!:OpenAComponent", &ComponentType, &component))
-	   return NULL;
+static PyObject* coreaudio_openacomponent(PyObject* self, PyObject* args)
+{
+    component_t* component;
+    AudioUnit au;
+    audio_unit_t* retval;
+    OSErr rc;
 
-	rc = OpenAComponent(component->component, &au);
-	if (rc != noErr)
-	{
-		PyErr_Format(CoreAudioError, "OpenAComponent failed: %4.4s", 
-					 (char*)&rc);
-		return NULL;
-	}
+    if (!PyArg_ParseTuple(args, "O!:OpenAComponent", &ComponentType,
+                          &component))
+        return NULL;
 
-	if (!(retval = (audio_unit_t *)PyObject_New(audio_unit_t, &AudioUnitType))) 
-		return NULL;
+    rc = OpenAComponent(component->component, &au);
+    if (rc != noErr) {
+        PyErr_Format(CoreAudioError, "OpenAComponent failed: %4.4s",
+                     (char*)&rc);
+        return NULL;
+    }
 
-	retval->instance = au;
-	retval->render_callback = NULL;
-	retval->user_data = NULL;
+    if (!(retval = (audio_unit_t*)PyObject_New(audio_unit_t, &AudioUnitType)))
+        return NULL;
 
-	return (PyObject*)retval;
+    retval->instance = au;
+    retval->render_callback = NULL;
+    retval->user_data = NULL;
+
+    return (PyObject*)retval;
 }
 
 static PyMethodDef coreaudio_methods[] = {
-	{"FindNextComponent", (PyCFunction)coreaudio_findnextcomponent, 
-	 METH_VARARGS},
-	{"OpenAComponent", (PyCFunction)coreaudio_openacomponent, 
-	 METH_VARARGS},
-	{NULL, NULL}
+    { "FindNextComponent", (PyCFunction)coreaudio_findnextcomponent,
+      METH_VARARGS },
+    { "OpenAComponent", (PyCFunction)coreaudio_openacomponent, METH_VARARGS },
+    { NULL, NULL }
 };
 
-#define _EXPORT_INT(mod, name) \
-	if (PyModule_AddIntConstant(mod, #name, (long) name) == -1) return;
+#define _EXPORT_INT(mod, name)                                                \
+    if (PyModule_AddIntConstant(mod, #name, (long)name) == -1)                \
+        return NULL;
 
-void initcoreaudio(void) {
-	PyObject *m;
+static PyModuleDef coreaudiomodule = {
+    .m_base = PyModuleDef_HEAD_INIT,
+    .m_name = "coreaudio",
+    .m_doc = coreaudio_module_doc,
+    .m_methods = coreaudio_methods,
+    .m_size = -1,
+};
 
-	PyEval_InitThreads();
 
-	ComponentDescriptionType.tp_members = component_desc_members;
-	ComponentDescriptionType.tp_new = component_desc_new;
-	ComponentType.tp_new = component_new;
+PyMODINIT_FUNC
+PyInit_coreaudio(void)
+// void initcoreaudio(void)
+{
+    PyObject* m;
 
-	AudioUnitType.tp_methods = audio_unit_methods;
-	AudioUnitType.tp_new = audio_unit_new;
+    PyEval_InitThreads();
 
-	AudioStreamBasicDescType.tp_members = audio_stream_basic_desc_members;
-	AudioStreamBasicDescType.tp_new = audio_stream_basic_desc_new;
+    if (PyType_Ready(&ComponentDescriptionType) < 0)
+        return NULL;
 
-	AudioTimeStampType.tp_new = audio_timestamp_new;
-	AudioTimeStampType.tp_methods = audio_timestamp_methods;
-	AudioTimeStampType.tp_members = audio_timestamp_members;
+    if (PyType_Ready(&ComponentType) < 0)
+        return NULL;
 
-	m = Py_InitModule3("coreaudio", coreaudio_methods, coreaudio_module_doc);
-	
-	CoreAudioError = PyErr_NewException("coreaudio.AudioError", NULL, NULL);
-	if (CoreAudioError) {
-		/* Each call to PyModule_AddObject decrefs it; compensate: */
-		
-		Py_INCREF(&ComponentType);
-		PyModule_AddObject(m, "Component", (PyObject *)&ComponentType);
+    if (PyType_Ready(&AudioStreamBasicDescType) < 0)
+        return NULL;
 
-		Py_INCREF(&ComponentDescriptionType);
-		PyModule_AddObject(m, "ComponentDescription", 
-						   (PyObject *)&ComponentDescriptionType);
+    if (PyType_Ready(&AudioTimeStampType) < 0)
+        return NULL;
 
-		Py_INCREF(&AudioStreamBasicDescType);
-		PyModule_AddObject(m, "AudioStreamBasicDescription", 
-						   (PyObject *)&AudioStreamBasicDescType);
+    if (PyType_Ready(&AudioUnitType) < 0)
+        return NULL;
 
-		Py_INCREF(&AudioUnitType);
-		PyModule_AddObject(m, "AudioUnit", (PyObject *)&AudioUnitType);
+    m = PyModule_Create(&coreaudiomodule);
+    if (m == NULL)
+        return NULL;
 
-		Py_INCREF(&AudioTimeStampType);
-		PyModule_AddObject(m, "AudioTimeStamp", 
-						   (PyObject *)&AudioTimeStampType);
-   	}
-	
-	_EXPORT_INT(m, kAudioUnitType_Output);
-	_EXPORT_INT(m, kAudioUnitSubType_HALOutput);
-	_EXPORT_INT(m, kAudioUnitSubType_DefaultOutput);
-	_EXPORT_INT(m, kAudioUnitSubType_SystemOutput);
-	_EXPORT_INT(m, kAudioUnitSubType_GenericOutput);
+    // m = Py_InitModule3("coreaudio", coreaudio_methods, coreaudio_module_doc);
 
-	_EXPORT_INT(m, kAudioUnitType_MusicDevice);
-	_EXPORT_INT(m, kAudioUnitSubType_DLSSynth);
+    CoreAudioError = PyErr_NewException("coreaudio.AudioError", NULL, NULL);
+    if (CoreAudioError) {
+        /* Each call to PyModule_AddObject decrefs it; compensate: */
 
-	_EXPORT_INT(m, kAudioUnitType_MusicEffect);
+        Py_INCREF(&ComponentType);
+        PyModule_AddObject(m, "Component", (PyObject*)&ComponentType);
 
-	_EXPORT_INT(m, kAudioUnitType_FormatConverter);
-	_EXPORT_INT(m, kAudioUnitSubType_AUConverter);
-	_EXPORT_INT(m, kAudioUnitSubType_Varispeed);
-	_EXPORT_INT(m, kAudioUnitSubType_DeferredRenderer);
-	_EXPORT_INT(m, kAudioUnitSubType_TimePitch);
-	_EXPORT_INT(m, kAudioUnitSubType_Splitter);
-	_EXPORT_INT(m, kAudioUnitSubType_Merger);
-	
-	_EXPORT_INT(m, kAudioUnitType_Effect);
-	_EXPORT_INT(m, kAudioUnitSubType_Delay);
-	_EXPORT_INT(m, kAudioUnitSubType_LowPassFilter);
-	_EXPORT_INT(m, kAudioUnitSubType_HighPassFilter);
-	_EXPORT_INT(m, kAudioUnitSubType_BandPassFilter);
-	_EXPORT_INT(m, kAudioUnitSubType_HighShelfFilter);
-	_EXPORT_INT(m, kAudioUnitSubType_LowShelfFilter);
-	_EXPORT_INT(m, kAudioUnitSubType_ParametricEQ);
-	_EXPORT_INT(m, kAudioUnitSubType_GraphicEQ);
-	_EXPORT_INT(m, kAudioUnitSubType_PeakLimiter);
-	_EXPORT_INT(m, kAudioUnitSubType_DynamicsProcessor);
-	_EXPORT_INT(m, kAudioUnitSubType_MultiBandCompressor);
-	_EXPORT_INT(m, kAudioUnitSubType_MatrixReverb);
-	_EXPORT_INT(m, kAudioUnitSubType_SampleDelay);
-	_EXPORT_INT(m, kAudioUnitSubType_Pitch);
-	_EXPORT_INT(m, kAudioUnitSubType_AUFilter);
-	_EXPORT_INT(m, kAudioUnitSubType_NetSend);
-	
-	_EXPORT_INT(m, kAudioUnitType_Mixer);
-	_EXPORT_INT(m, kAudioUnitSubType_StereoMixer);
-	_EXPORT_INT(m, kAudioUnitSubType_3DMixer);
-	_EXPORT_INT(m, kAudioUnitSubType_MatrixMixer);
+        Py_INCREF(&ComponentDescriptionType);
+        PyModule_AddObject(m, "ComponentDescription",
+                           (PyObject*)&ComponentDescriptionType);
 
-	_EXPORT_INT(m, kAudioUnitType_Panner);
+        Py_INCREF(&AudioStreamBasicDescType);
+        PyModule_AddObject(m, "AudioStreamBasicDescription",
+                           (PyObject*)&AudioStreamBasicDescType);
 
-	_EXPORT_INT(m, kAudioUnitType_OfflineEffect);
+        Py_INCREF(&AudioUnitType);
+        PyModule_AddObject(m, "AudioUnit", (PyObject*)&AudioUnitType);
 
-	_EXPORT_INT(m, kAudioUnitType_Generator);
-	_EXPORT_INT(m, kAudioUnitSubType_ScheduledSoundPlayer);
-	_EXPORT_INT(m, kAudioUnitSubType_AudioFilePlayer);
-	_EXPORT_INT(m, kAudioUnitSubType_NetReceive);
+        Py_INCREF(&AudioTimeStampType);
+        PyModule_AddObject(m, "AudioTimeStamp",
+                           (PyObject*)&AudioTimeStampType);
+    }
 
-	_EXPORT_INT(m, kAudioUnitManufacturer_Apple);
+    _EXPORT_INT(m, kAudioUnitType_Output);
+    _EXPORT_INT(m, kAudioUnitSubType_HALOutput);
+    _EXPORT_INT(m, kAudioUnitSubType_DefaultOutput);
+    _EXPORT_INT(m, kAudioUnitSubType_SystemOutput);
+    _EXPORT_INT(m, kAudioUnitSubType_GenericOutput);
 
-	_EXPORT_INT(m, kAudioFormatLinearPCM);
+    _EXPORT_INT(m, kAudioUnitType_MusicDevice);
+    _EXPORT_INT(m, kAudioUnitSubType_DLSSynth);
+
+    _EXPORT_INT(m, kAudioUnitType_MusicEffect);
+
+    _EXPORT_INT(m, kAudioUnitType_FormatConverter);
+    _EXPORT_INT(m, kAudioUnitSubType_AUConverter);
+    _EXPORT_INT(m, kAudioUnitSubType_Varispeed);
+    _EXPORT_INT(m, kAudioUnitSubType_DeferredRenderer);
+    _EXPORT_INT(m, kAudioUnitSubType_TimePitch);
+    _EXPORT_INT(m, kAudioUnitSubType_Splitter);
+    _EXPORT_INT(m, kAudioUnitSubType_Merger);
+
+    _EXPORT_INT(m, kAudioUnitType_Effect);
+    _EXPORT_INT(m, kAudioUnitSubType_Delay);
+    _EXPORT_INT(m, kAudioUnitSubType_LowPassFilter);
+    _EXPORT_INT(m, kAudioUnitSubType_HighPassFilter);
+    _EXPORT_INT(m, kAudioUnitSubType_BandPassFilter);
+    _EXPORT_INT(m, kAudioUnitSubType_HighShelfFilter);
+    _EXPORT_INT(m, kAudioUnitSubType_LowShelfFilter);
+    _EXPORT_INT(m, kAudioUnitSubType_ParametricEQ);
+    _EXPORT_INT(m, kAudioUnitSubType_GraphicEQ);
+    _EXPORT_INT(m, kAudioUnitSubType_PeakLimiter);
+    _EXPORT_INT(m, kAudioUnitSubType_DynamicsProcessor);
+    _EXPORT_INT(m, kAudioUnitSubType_MultiBandCompressor);
+    _EXPORT_INT(m, kAudioUnitSubType_MatrixReverb);
+    _EXPORT_INT(m, kAudioUnitSubType_SampleDelay);
+    _EXPORT_INT(m, kAudioUnitSubType_Pitch);
+    _EXPORT_INT(m, kAudioUnitSubType_AUFilter);
+    _EXPORT_INT(m, kAudioUnitSubType_NetSend);
+
+    _EXPORT_INT(m, kAudioUnitType_Mixer);
+    _EXPORT_INT(m, kAudioUnitSubType_StereoMixer);
+    // _EXPORT_INT(m, kAudioUnitSubType_3DMixer);
+    _EXPORT_INT(m, kAudioUnitSubType_MatrixMixer);
+
+    _EXPORT_INT(m, kAudioUnitType_Panner);
+
+    _EXPORT_INT(m, kAudioUnitType_OfflineEffect);
+
+    _EXPORT_INT(m, kAudioUnitType_Generator);
+    _EXPORT_INT(m, kAudioUnitSubType_ScheduledSoundPlayer);
+    _EXPORT_INT(m, kAudioUnitSubType_AudioFilePlayer);
+    _EXPORT_INT(m, kAudioUnitSubType_NetReceive);
+
+    _EXPORT_INT(m, kAudioUnitManufacturer_Apple);
+
+    _EXPORT_INT(m, kAudioFormatLinearPCM);
     _EXPORT_INT(m, kAudioFormatAC3);
     _EXPORT_INT(m, kAudioFormat60958AC3);
     _EXPORT_INT(m, kAudioFormatAppleIMA4);
@@ -970,5 +845,7 @@ void initcoreaudio(void) {
     _EXPORT_INT(m, kAudioTimeStampHostTimeValid);
     _EXPORT_INT(m, kAudioTimeStampRateScalarValid);
     _EXPORT_INT(m, kAudioTimeStampWordClockTimeValid);
-	_EXPORT_INT(m, kAudioTimeStampSMPTETimeValid);
+    _EXPORT_INT(m, kAudioTimeStampSMPTETimeValid);
+
+    return m;
 }
