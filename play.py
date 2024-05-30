@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import coreaudio
 import time
@@ -79,13 +79,13 @@ def play(au, f):
 
 def open_default_au(manufacturer = 'appl'):
 
-    desc = coreaudio.ComponentDescription(
+    desc = coreaudio.AudioComponentDescription(
         coreaudio.kAudioUnitType_Output,
         coreaudio.kAudioUnitSubType_DefaultOutput, fourcctoi(manufacturer))
     print(desc)
 
-    c = coreaudio.FindNextComponent(None, desc)
-    au = coreaudio.OpenAComponent(c)
+    c = coreaudio.AudioComponentFindNext(None, desc)
+    au = coreaudio.AudioComponentInstanceNew(c)
 
     au.Initialize()
 
