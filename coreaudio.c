@@ -28,17 +28,17 @@ typedef int Py_ssize_t;
 
 PyDoc_STRVAR(coreaudio_module_doc,
              "This modules provides support for the CoreAudio API.\n"
-             "Available types are: Component, ComponentDescription and "
+             "Available types are: AudioComponent, AudioComponentDescription and "
              "AudioStreamBasicDescType.\n");
 
 static PyObject* CoreAudioError;
 
 typedef struct {
     PyObject_HEAD;
-    ComponentDescription desc;
+    AudioComponentDescription desc;
 } component_desc_t;
 
-static PyTypeObject ComponentDescriptionType;
+static PyTypeObject AudioComponentDescriptionType;
 
 static PyObject* component_desc_new(PyTypeObject* type, PyObject* args,
                                     PyObject* kwds)
@@ -50,12 +50,12 @@ static PyObject* component_desc_new(PyTypeObject* type, PyObject* args,
     UInt32 flags = 0;
     UInt32 mask = 0;
 
-    if (!PyArg_ParseTuple(args, "|IIIII:ComponentDescription", &cotype,
+    if (!PyArg_ParseTuple(args, "|IIIII:AudioComponentDescription", &cotype,
                           &subtype, &manufacturer, &flags, &mask))
         return NULL;
 
     if (!(self = (component_desc_t*)PyObject_New(component_desc_t,
-                                                 &ComponentDescriptionType)))
+                                                 &AudioComponentDescriptionType)))
         return NULL;
 
     self->desc.componentType = cotype;
@@ -74,7 +74,7 @@ static void component_desc_dealloc(component_desc_t* obj)
 
 static PyObject* component_desc_repr(component_desc_t* obj)
 {
-    return PyUnicode_FromFormat("ComponentDescription('%c%c%c%c', "
+    return PyUnicode_FromFormat("AudioComponentDescription('%c%c%c%c', "
                                "'%c%c%c%c', '%c%c%c%c', 0x%x, 0x%x)",
                                FOURCC_ARGS(obj->desc.componentType),
                                FOURCC_ARGS(obj->desc.componentSubType),
@@ -97,11 +97,11 @@ static PyMemberDef component_desc_members[] = {
     { NULL } /* Sentinel */
 };
 
-static PyTypeObject ComponentDescriptionType = {
+static PyTypeObject AudioComponentDescriptionType = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    .tp_name = "coreaudio.ComponentDescription",
+    .tp_name = "coreaudio.AudioComponentDescription",
     .tp_basicsize = sizeof(component_desc_t),
-    .tp_doc = PyDoc_STR("CoreFoundation ComponentDescription"),
+    .tp_doc = PyDoc_STR("CoreFoundation AudioComponentDescription"),
     .tp_new = component_desc_new,
     .tp_dealloc = (destructor)component_desc_dealloc,
     .tp_repr = (reprfunc)component_desc_repr,
@@ -111,20 +111,20 @@ static PyTypeObject ComponentDescriptionType = {
 
 typedef struct {
     PyObject_HEAD;
-    Component component;
+    AudioComponent component;
 } component_t;
 
-static PyTypeObject ComponentType;
+static PyTypeObject AudioComponentType;
 
 static PyObject* component_new(PyTypeObject* type, PyObject* args,
                                PyObject* kwds)
 {
     component_t* self;
 
-    if (!PyArg_ParseTuple(args, ":Component"))
+    if (!PyArg_ParseTuple(args, ":AudioComponent"))
         return NULL;
 
-    if (!(self = (component_t*)PyObject_New(component_t, &ComponentType)))
+    if (!(self = (component_t*)PyObject_New(component_t, &AudioComponentType)))
         return NULL;
 
     self->component = NULL;
@@ -134,11 +134,11 @@ static PyObject* component_new(PyTypeObject* type, PyObject* args,
 
 static void component_dealloc(component_t* obj) { PyObject_Free(obj); }
 
-static PyTypeObject ComponentType = {
+static PyTypeObject AudioComponentType = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    .tp_name = "coreaudio.Component",
+    .tp_name = "coreaudio.AudioComponent",
     .tp_basicsize = sizeof(component_t),
-    .tp_doc = PyDoc_STR("CoreFoundation Component"),
+    .tp_doc = PyDoc_STR("CoreFoundation AudioComponent"),
     .tp_new = component_new,
     .tp_dealloc = (destructor)component_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -336,7 +336,7 @@ static void audio_unit_dealloc(audio_unit_t* obj)
 
     if (obj->instance) {
         AudioUnitUninitialize(obj->instance);
-        CloseComponent(obj->instance);
+        AudioComponentInstanceDispose(obj->instance);
     }
 
     PyObject_Free(obj);
@@ -621,21 +621,21 @@ static PyObject* coreaudio_findnextcomponent(PyObject* self, PyObject* args)
 {
     component_t* component;
     component_desc_t* componentDescription;
-    Component c;
+    AudioComponent c;
     component_t* retval;
 
-    if (!PyArg_ParseTuple(args, "OO!:FindNextComponent", &component,
-                          &ComponentDescriptionType, &componentDescription))
+    if (!PyArg_ParseTuple(args, "OO!:AudioComponentFindNext", &component,
+                          &AudioComponentDescriptionType, &componentDescription))
         return NULL;
 
-    if (!PyArg_ParseTuple(args, "OO:FindNextComponent", &component,
+    if (!PyArg_ParseTuple(args, "OO:AudioComponentFindNext", &component,
                           &componentDescription))
         return NULL;
 
     if ((PyObject*)component == Py_None)
-        c = FindNextComponent(NULL, &componentDescription->desc);
+        c = AudioComponentFindNext(NULL, &componentDescription->desc);
     else
-        c = FindNextComponent(component->component,
+        c = AudioComponentFindNext(component->component,
                               &componentDescription->desc);
 
     if (!c) {
@@ -643,7 +643,7 @@ static PyObject* coreaudio_findnextcomponent(PyObject* self, PyObject* args)
         return Py_None;
     }
 
-    if (!(retval = (component_t*)PyObject_New(component_t, &ComponentType)))
+    if (!(retval = (component_t*)PyObject_New(component_t, &AudioComponentType)))
         return NULL;
 
     retval->component = c;
@@ -651,20 +651,20 @@ static PyObject* coreaudio_findnextcomponent(PyObject* self, PyObject* args)
     return (PyObject*)retval;
 }
 
-static PyObject* coreaudio_openacomponent(PyObject* self, PyObject* args)
+static PyObject* coreaudio_instancenew(PyObject* self, PyObject* args)
 {
     component_t* component;
     AudioUnit au;
     audio_unit_t* retval;
     OSErr rc;
 
-    if (!PyArg_ParseTuple(args, "O!:OpenAComponent", &ComponentType,
+    if (!PyArg_ParseTuple(args, "O!:AudioComponentInstanceNew", &AudioComponentType,
                           &component))
         return NULL;
 
-    rc = OpenAComponent(component->component, &au);
+    rc = AudioComponentInstanceNew(component->component, &au);
     if (rc != noErr) {
-        PyErr_Format(CoreAudioError, "OpenAComponent failed: %4.4s",
+        PyErr_Format(CoreAudioError, "AudioComponentInstanceNew failed: %4.4s",
                      (char*)&rc);
         return NULL;
     }
@@ -680,9 +680,9 @@ static PyObject* coreaudio_openacomponent(PyObject* self, PyObject* args)
 }
 
 static PyMethodDef coreaudio_methods[] = {
-    { "FindNextComponent", (PyCFunction)coreaudio_findnextcomponent,
+    { "AudioComponentFindNext", (PyCFunction)coreaudio_findnextcomponent,
       METH_VARARGS },
-    { "OpenAComponent", (PyCFunction)coreaudio_openacomponent, METH_VARARGS },
+    { "AudioComponentInstanceNew", (PyCFunction)coreaudio_instancenew, METH_VARARGS },
     { NULL, NULL }
 };
 
@@ -705,12 +705,12 @@ PyInit_coreaudio(void)
 {
     PyObject* m;
 
-    PyEval_InitThreads();
+    // PyEval_InitThreads();
 
-    if (PyType_Ready(&ComponentDescriptionType) < 0)
+    if (PyType_Ready(&AudioComponentDescriptionType) < 0)
         return NULL;
 
-    if (PyType_Ready(&ComponentType) < 0)
+    if (PyType_Ready(&AudioComponentType) < 0)
         return NULL;
 
     if (PyType_Ready(&AudioStreamBasicDescType) < 0)
@@ -732,12 +732,12 @@ PyInit_coreaudio(void)
     if (CoreAudioError) {
         /* Each call to PyModule_AddObject decrefs it; compensate: */
 
-        Py_INCREF(&ComponentType);
-        PyModule_AddObject(m, "Component", (PyObject*)&ComponentType);
+        Py_INCREF(&AudioComponentType);
+        PyModule_AddObject(m, "AudioComponent", (PyObject*)&AudioComponentType);
 
-        Py_INCREF(&ComponentDescriptionType);
-        PyModule_AddObject(m, "ComponentDescription",
-                           (PyObject*)&ComponentDescriptionType);
+        Py_INCREF(&AudioComponentDescriptionType);
+        PyModule_AddObject(m, "AudioComponentDescription",
+                           (PyObject*)&AudioComponentDescriptionType);
 
         Py_INCREF(&AudioStreamBasicDescType);
         PyModule_AddObject(m, "AudioStreamBasicDescription",
