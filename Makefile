@@ -4,7 +4,7 @@ PY_LIBDIR=$(shell python -c 'import sysconfig as sc; print sc.get_config_var("LI
 
 PY_LIB=$(shell python -c 'import sysconfig as sc; print sc.get_config_var("LIBRARY")[3:-2]')
 
-.PHONY: all build clean
+.PHONY: all build test clean
 
 all: build
 
@@ -22,6 +22,9 @@ caplaymu: caplaymu.c
 clean:
 	@rm -f *.o *.so caplaymu 
 	@rm -rf build caplaymu.dSYM
+
+test:
+	@python3 play.py bimbam.wav
 
 build:
 	@python3 setup.py build
