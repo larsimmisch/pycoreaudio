@@ -1,7 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import coreaudio
-import time
 import threading
 from optparse import OptionParser
 import wave
@@ -17,7 +16,7 @@ def fourcctoi(v):
     return (ord(v[0]) << 24) + (ord(v[1]) << 16) + (ord(v[2]) << 8) + ord(v[3])
 
 def au_wav_prepare(au, fn, verbose = False):
-    """Open a wav file called 'fn' and set the stream format based upon the 
+    """Open a wav file called 'fn' and set the stream format based upon the
     information in the wav header.
 
     Returns the open file."""
@@ -30,7 +29,7 @@ def au_wav_prepare(au, fn, verbose = False):
     channels: %d
     sample width: %d
     """ % (fn, f.getframerate(), f.getnchannels(), f.getsampwidth()))
-               
+
     sd = coreaudio.AudioStreamBasicDescription(
         f.getframerate(),
         coreaudio.kAudioFormatLinearPCM,
@@ -50,8 +49,8 @@ def play(au, f):
     def render_callback(flags, time, bus, frames, nbuffers, user_data):
         done.acquire()
         buf = f.readframes(frames)
-        # print 'read %d bytes' % len(buf)
-        
+        # print(f'read {len(buf)} bytes')
+
         if not buf:
             done.notify()
             done.release()
@@ -65,7 +64,7 @@ def play(au, f):
         if sil:
             buf = buf + '\0' * sil
         return (None, buf)
-    
+
     done = threading.Condition()
     done.acquire()
 
@@ -73,7 +72,7 @@ def play(au, f):
     au.SetRenderCallback(render_callback)
     print('Starting')
     au.Start()
-    
+
     done.wait()
     au.SetRenderCallback(None)
 
@@ -107,7 +106,7 @@ if __name__ == '__main__':
     options, args = parser.parse_args()
     if len(args) < 1:
         parser.error('need at least one file argument')
-    
+
     au = open_default_au(options.manufacturer)
 
     for a in args:

@@ -399,7 +399,7 @@ static OSStatus audio_unit_render_callback(
     if (o != Py_None) {
         if (!PyLong_Check(o)) {
             fprintf(stderr,
-                    "render callback must return a tuple (int, buffers)\n");
+                    "render callback must return a tuple (None|int, bytes)\n");
             goto error;
         }
 
@@ -411,9 +411,9 @@ static OSStatus audio_unit_render_callback(
         Py_ssize_t len;
 
         o = PyTuple_GetItem(result, i);
-        if (!PyUnicode_Check(o)) {
+        if (!PyBytes_Check(o)) {
             fprintf(stderr,
-                    "render callback must return a tuple (int, buffers)\n");
+                    "render callback must return a tuple (None|int, bytes)\n");
             goto error;
         }
         if (PyBytes_AsStringAndSize(o, &buffer, &len) < 0)
@@ -701,11 +701,13 @@ static PyModuleDef coreaudiomodule = {
 
 PyMODINIT_FUNC
 PyInit_coreaudio(void)
-// void initcoreaudio(void)
 {
-    PyObject* m;
 
-    // PyEval_InitThreads();
+#if PY_VERSION_HEX < 0x03090000
+    PyEval_InitThreads();
+#else
+    Py_Initialize();
+#endif
 
     if (PyType_Ready(&AudioComponentDescriptionType) < 0)
         return NULL;
@@ -722,7 +724,7 @@ PyInit_coreaudio(void)
     if (PyType_Ready(&AudioUnitType) < 0)
         return NULL;
 
-    m = PyModule_Create(&coreaudiomodule);
+    PyObject* m = PyModule_Create(&coreaudiomodule);
     if (m == NULL)
         return NULL;
 
