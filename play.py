@@ -25,11 +25,11 @@ def au_wav_prepare(au, fn, verbose = False):
     f = wave.open(fn, 'r')
 
     if verbose:
-        print """%s:
+        print("""%s:
     sampling rate: %d
     channels: %d
     sample width: %d
-    """ % (fn, f.getframerate(), f.getnchannels(), f.getsampwidth())
+    """ % (fn, f.getframerate(), f.getnchannels(), f.getsampwidth()))
                
     sd = coreaudio.AudioStreamBasicDescription(
         f.getframerate(),
@@ -69,9 +69,9 @@ def play(au, f):
     done = threading.Condition()
     done.acquire()
 
-    print 'Setting render callback'
+    print('Setting render callback')
     au.SetRenderCallback(render_callback)
-    print 'Starting'
+    print('Starting')
     au.Start()
     
     done.wait()
@@ -79,13 +79,13 @@ def play(au, f):
 
 def open_default_au(manufacturer = 'appl'):
 
-    desc = coreaudio.ComponentDescription(
+    desc = coreaudio.AudioComponentDescription(
         coreaudio.kAudioUnitType_Output,
         coreaudio.kAudioUnitSubType_DefaultOutput, fourcctoi(manufacturer))
-    print desc
+    print(desc)
 
-    c = coreaudio.FindNextComponent(None, desc)
-    au = coreaudio.OpenAComponent(c)
+    c = coreaudio.AudioComponentFindNext(None, desc)
+    au = coreaudio.AudioComponentInstanceNew(c)
 
     au.Initialize()
 
@@ -111,7 +111,7 @@ if __name__ == '__main__':
     au = open_default_au(options.manufacturer)
 
     for a in args:
-        print 'playing %s' % a
+        print('playing %s' % a)
         f = au_wav_prepare(au, a, options.verbose)
         play(au, f)
         f.close()

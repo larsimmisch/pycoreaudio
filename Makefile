@@ -1,20 +1,27 @@
-PY_INCLUDE=$(shell python -c 'import distutils.sysconfig as sc; print sc.get_python_inc()')
+PY_INCLUDE=$(shell python -c 'import sysconfig as sc; print sc.get_config_var("INCLUDEDIR")')
 
-PY_LIBDIR=$(shell python -c 'import distutils.sysconfig as sc; print sc.get_config_var("LIBPL")')
+PY_LIBDIR=$(shell python -c 'import sysconfig as sc; print sc.get_config_var("LIBPL")')
 
-PY_LIB=$(shell python -c 'import distutils.sysconfig as sc; print sc.get_config_var("LIBRARY")[3:-2]')
+PY_LIB=$(shell python -c 'import sysconfig as sc; print sc.get_config_var("LIBRARY")[3:-2]')
 
-all: coreaudio.so caplaymu
+.PHONY: all build clean
 
-coreaudio.o: coreaudio.c
-	gcc -g -c -I$(PY_INCLUDE) -o $@ $<
+all: build
 
-coreaudio.so: coreaudio.o
-	gcc -g -dynamiclib -o $@ $< -L$(PY_LIBDIR) -l$(PY_LIB) -framework CoreServices -framework CoreAudio -framework AudioUnit 
+# all: coreaudio.so caplaymu
+
+# coreaudio.o: coreaudio.c
+# 	gcc -g -c -I$(PY_INCLUDE) -o $@ $<
+
+# coreaudio.so: coreaudio.o
+# 	gcc -g -dynamiclib -o $@ $< -L$(PY_LIBDIR) -l$(PY_LIB) -framework CoreServices -framework CoreAudio -framework AudioUnit 
 
 caplaymu: caplaymu.c
-	gcc -g -o $@ $< -framework CoreServices -framework CoreAudio -framework AudioUnit 
+	@gcc -g -o $@ $< -framework CoreServices -framework CoreAudio -framework AudioUnit 
 
 clean:
-	rm -f *.o *.so caplaymu 
-	rm -rf build caplaymu.dSYM
+	@rm -f *.o *.so caplaymu 
+	@rm -rf build caplaymu.dSYM
+
+build:
+	@python3 setup.py build
