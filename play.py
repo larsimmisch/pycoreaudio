@@ -62,7 +62,7 @@ def play(au, f):
         # pad the last frame with silence
         sil = frames * 2 - len(buf)
         if sil:
-            buf = buf + '\0' * sil
+            buf = buf + b'\0' * sil
         return (None, buf)
 
     done = threading.Condition()
