@@ -55,7 +55,7 @@ def play(au, f):
             done.notify()
             done.release()
             # This will implicitly stop the playback without a warning
-            return (None, '')
+            return (None, b'')
 
         done.release()
 
